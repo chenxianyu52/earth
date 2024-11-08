@@ -11,7 +11,7 @@ import com.xianyu.earthquake.data.EarthShowData
 
 
 class ItemAdapter(
-    private val items: List<EarthShowData?>,
+    private var items: List<EarthShowData?>,
     private val itemClick: OnItemClickListener
 ) : RecyclerView.Adapter<ItemAdapter.ItemViewHolder>() {
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ItemViewHolder {
@@ -29,12 +29,18 @@ class ItemAdapter(
             holder.time.text = time
         }
         holder.itemView.setOnClickListener {
-            itemClick.onItemClick(position)
+            itemClick.onItemClick(item)
         }
     }
 
     override fun getItemCount(): Int {
         return items.size
+    }
+
+    fun updateItems(newItems: List<EarthShowData?>) {
+        val updatedItems = newItems.filterNotNull()
+        items = updatedItems
+        notifyDataSetChanged()  // 更新列表
     }
 
     inner class ItemViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
@@ -43,8 +49,10 @@ class ItemAdapter(
         val time: TextView = itemView.findViewById(R.id.time)
     }
 
+
+
     // 定义点击回调接口
     interface OnItemClickListener {
-        fun onItemClick(position: Int)
+        fun onItemClick(showData: EarthShowData)
     }
 }

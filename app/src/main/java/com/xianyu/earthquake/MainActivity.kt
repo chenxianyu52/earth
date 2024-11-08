@@ -7,20 +7,23 @@ import android.os.Bundle
 import android.view.View
 import android.widget.ProgressBar
 import android.widget.Toast
-import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.xianyu.earthquake.data.EarthShowData
 import com.xianyu.earthquake.util.Utils
 import com.xianyu.earthquake.util.Utils.MAX_LAN_LONG
 import com.xianyu.earthquake.util.Utils.MIN_MAG
 import com.xianyu.earthquake.view.ItemAdapter
 import com.xianyu.earthquake.viewmodel.EarthViewModel
 import kotlinx.coroutines.launch
+import org.koin.android.ext.android.inject
+import org.koin.core.component.KoinComponent
 
-class MainActivity : AppCompatActivity() {
-    private val itemViewModel: EarthViewModel = EarthViewModel()
+class MainActivity : AppCompatActivity(), KoinComponent {
+    private val itemViewModel: EarthViewModel by inject()
+    private var itemAdapter: ItemAdapter? = null
 
     @SuppressLint("MissingInflatedId")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -31,39 +34,46 @@ class MainActivity : AppCompatActivity() {
         recyclerView.layoutManager = LinearLayoutManager(this)
         val marginDecoration = ItemMarginDecoration(Utils.getDpToPixel(this, 5))
         recyclerView.addItemDecoration(marginDecoration)
+        itemAdapter = ItemAdapter(emptyList(), object : ItemAdapter.OnItemClickListener {
+            override fun onItemClick(showData: EarthShowData) {
+                val longitude = showData.longitude
+                val latitude = showData.latitude
+                val magnitude = showData.mag ?: MIN_MAG
+                if (longitude == MAX_LAN_LONG || latitude == MAX_LAN_LONG) {
+                    Toast.makeText(
+                        this@MainActivity,
+                        "经纬度数据异常",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    return
+                }
+                val intent = Intent(this@MainActivity, MapActivity::class.java)
+                val bundle = Bundle()
+                bundle.putDouble("longitude", longitude)
+                bundle.putDouble("latitude", latitude)
+                bundle.putDouble("magnitude", magnitude)
+                intent.putExtras(bundle)
+                startActivity(intent)
+            }
+        })
+        recyclerView.adapter = itemAdapter
 
 
         // 使用生命周期感知的协程，直接收集 Flow
         lifecycleScope.launch {
             progressBar.visibility = View.VISIBLE
-            itemViewModel.getItemsFlow().collect { data ->
-                progressBar.visibility = View.GONE
-                if (data.isNullOrEmpty()) {
-                    return@collect
+            try {
+                itemViewModel.getItemsFlow().collect { data ->
+                    progressBar.visibility = View.GONE
+                    if (data.isNullOrEmpty()) {
+                        Toast.makeText(this@MainActivity, "数据为空", Toast.LENGTH_SHORT).show()
+                        return@collect
+                    }
+                    itemAdapter?.updateItems(data)
                 }
-                recyclerView.adapter =
-                    ItemAdapter(data, object : ItemAdapter.OnItemClickListener {
-                        override fun onItemClick(position: Int) {
-                            val longitude = data[position].longitude
-                            val latitude = data[position].latitude
-                            val magnitude = data[position].mag ?: MIN_MAG
-                            if (longitude == MAX_LAN_LONG || latitude == MAX_LAN_LONG) {
-                                Toast.makeText(
-                                    this@MainActivity,
-                                    "经纬度数据异常",
-                                    Toast.LENGTH_LONG
-                                ).show()
-                                return
-                            }
-                            val intent = Intent(this@MainActivity, MapActivity::class.java)
-                            val bundle = Bundle()
-                            bundle.putDouble("longitude", longitude)
-                            bundle.putDouble("latitude", latitude)
-                            bundle.putDouble("magnitude", magnitude)
-                            intent.putExtras(bundle)
-                            startActivity(intent)
-                        }
-                    })
+            } catch (e:Exception){
+                progressBar.visibility = View.GONE
+                Toast.makeText(this@MainActivity, "数据加载失败", Toast.LENGTH_SHORT).show()
             }
         }
     }
